@@ -7,7 +7,8 @@
   </head>
   <body class="container py-4">
     <h1 class="mb-3">Preview (first {{ rows|length }} emails)</h1>
-    <p class="text-muted">Looks good? Download the full mail merge file below.</p>
+    <p class="text-muted">Looks good? Download the full mail merge or .eml drafts below.</p>
+
     <div class="table-responsive">
       <table class="table table-sm table-striped align-middle">
         <thead><tr><th>Email</th><th>Name</th><th>Subject</th><th>Body (excerpt)</th></tr></thead>
@@ -24,10 +25,16 @@
       </table>
     </div>
 
-    <form method="post" action="{{ url_for('download_csv') }}">
+    <form class="d-inline" method="post" action="{{ url_for('download_csv') }}">
       <input type="hidden" name="payload" value="{{ payload }}">
       <button class="btn btn-primary">⬇️ Download mail_merge.csv</button>
-      <a class="btn btn-outline-secondary ms-2" href="{{ url_for('index') }}">← Start over</a>
     </form>
+
+    <form class="d-inline" method="post" action="{{ url_for('download_eml_zip') }}">
+      <input type="hidden" name="payload" value="{{ payload }}">
+      <button class="btn btn-outline-primary ms-2">⬇️ Download .eml (ZIP)</button>
+    </form>
+
+    <a class="btn btn-outline-secondary ms-2" href="{{ url_for('index') }}">← Start over</a>
   </body>
 </html>
