@@ -4,10 +4,8 @@ def _format_product_line(p):
     name = p.get("name") or "Product"
     url = p.get("url")
     bullet = f"- {name}"
-    if price_str:
-        bullet += f" — {price_str}"
-    if url:
-        bullet += f" ({url})"
+    if price_str: bullet += f" — {price_str}"
+    if url: bullet += f" ({url})"
     return bullet
 
 def build_email_for_customer(customer, recommendations, greeting_tpl, intro_tpl, footer_tpl, sender_name):
