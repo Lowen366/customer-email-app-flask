@@ -6,6 +6,14 @@ from product_parser import parse_products_from_pdf, parse_products_from_csv
 from matcher import match_products_to_customers
 from email_templates import build_email_for_customer
 
+REQUIRED_CUSTOMER_COLS = ["email", "name"]
+SUGGESTED_PRODUCT_COLS = ["name", "price"]  # category/sku/url optional
+
+def assert_required_cols(df, required, label):
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"{label} file is missing required column(s): {', '.join(missing)}")
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "devkey")
 
