@@ -16,10 +16,8 @@ def _guess_price(text):
 def parse_products_from_pdf(file_like):
     logs, rows = [], []
     with pdfplumber.open(file_like) as pdf:
-        logs.append(f"Pages detected: {len(pdf.pages)}")
-        for i, page in enumerate(pdf.pages, start=1):
+        for page in pdf.pages:
             text = page.extract_text() or ""
-            logs.append(f"-- Page {i}: {len(text)} chars")
             for raw_line in text.splitlines():
                 line = raw_line.strip()
                 if not line:
@@ -32,14 +30,8 @@ def parse_products_from_pdf(file_like):
                         break
                 if re.search(r"[A-Za-z]{3,}", line):
                     rows.append({
-                        "name": line,
-                        "category": category,
-                        "price": price,
-                        "sku": None,
-                        "url": None
+                        "name": line, "category": category,
+                        "price": price, "sku": None, "url": None
                     })
     df = pd.DataFrame(rows).drop_duplicates(subset=["name"])
     return df.head(1000), logs
-
-def parse_products_from_csv(file_like):
-    return pd.read_csv(file_like)
