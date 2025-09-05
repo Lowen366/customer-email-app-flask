@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>PDF → Customer Email Matcher</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 24px; max-width: 900px; margin: auto; }
+      .card { border: 1px solid #ddd; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+      h1 { margin-top: 0; }
+      label { display:block; font-weight:600; margin-top:12px; }
+      input[type="text"], textarea, input[type="number"] { width: 100%; padding: 8px; border:1px solid #ccc; border-radius:8px; }
+      input[type="file"] { margin-top: 8px; }
+      button { padding: 10px 16px; border: 0; border-radius: 8px; background: #0255ff; color: white; font-weight: 700; cursor: pointer; }
+      .row { display:flex; gap:20px; }
+      .col { flex:1; }
+      .hint { color:#555; font-size: 0.9em; }
+    </style>
+  </head>
+  <body>
+    <h1>📧 PDF → Customer Email Matcher</h1>
+    <p class="hint">Upload a <strong>Products PDF</strong> (or <strong>Products CSV</strong>) and a <strong>Customers CSV</strong>. You'll get a <code>mail_merge.csv</code> to download.</p>
+
+    <form action="/" method="POST" enctype="multipart/form-data" class="card">
+      <div class="row">
+        <div class="col">
+          <h3>Products</h3>
+          <label>Products CSV (recommended)</label>
+          <input type="file" name="prod_csv" accept=".csv">
+          <label>or Product PDF</label>
+          <input type="file" name="prod_pdf" accept="application/pdf">
+          <p class="hint">CSV columns: <code>name</code> (req), <code>price</code>, <code>category</code>, <code>sku</code>, <code>url</code></p>
+        </div>
+        <div class="col">
+          <h3>Customers</h3>
+          <label>Customers CSV</label>
+          <input type="file" name="cust_csv" accept=".csv" required>
+          <p class="hint">Columns: <code>email</code>, <code>name</code>; optional <code>preferred_category</code>, <code>max_budget</code></p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Email Settings</h3>
+        <label>Sender name</label>
+        <input type="text" name="sender_name" value="Customer Success">
+        <label>Subject template</label>
+        <input type="text" name="subject_tpl" value="Your picks from our latest catalogue">
+        <label>Greeting line</label>
+        <textarea name="greeting_tpl" rows="2">Hi {name},</textarea>
+        <label>Intro paragraph</label>
+        <textarea name="intro_tpl" rows="2">We picked a few things we think you'll like:</textarea>
+        <label>Footer / signature</label>
+        <textarea name="footer_tpl" rows="4">If you have any questions, just hit reply.
+
+Best,
+{sender_name}</textarea>
+        <label>Max products per customer</label>
+        <input type="number" name="max_recs" value="3" min="1" max="10">
+      </div>
+
+      <button type="submit">Generate & Download mail_merge.csv</button>
+    </form>
+  </body>
+</html>
