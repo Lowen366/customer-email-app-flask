@@ -60,7 +60,12 @@ def allowed(filename, exts):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in exts
 
 # ---- Gmail OAuth helpers ----
-GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+GMAIL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.compose"
+]
+
 
 def get_google_flow():
     client_config = {
