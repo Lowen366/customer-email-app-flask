@@ -13,6 +13,9 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from flask import session
+
+
 # --- optional AI (safe: won’t crash if not configured) ---
 OPENAI_ENABLED = False
 client = None
@@ -45,6 +48,31 @@ def gmail_connected_email() -> str | None:
         return None
     except Exception:
         return None
+from googleapiclient.errors import HttpError
+from email.message import EmailMessage
+import base64
+
+def get_gmail_service():
+    data = session.get("gmail_creds")
+    if not data:
+        return None
+    creds = Credentials(**data)
+    return build("gmail", "v1", credentials=creds)
+
+def gmail_send(to_addr: str, subject: str, body: str) -> dict:
+    """Send a plain-text email via Gmail API. Returns API response dict."""
+    service = get_gmail_service()
+    if not service:
+        raise RuntimeError("Gmail not connected")
+
+    msg = EmailMessage()
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    # From is set automatically by Gmail as the connected account
+    msg.set_content(body)
+
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("utf-8")
+    return service.users().messages().send(userId="me", body={"raw": raw}).execute()
 
 
 # Flask
