@@ -7,10 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# poppler-utils needed by pdfplumber for some operations; also basic build deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils \
-    build-essential \
+    poppler-utils build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
