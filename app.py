@@ -12,9 +12,100 @@ client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o-mini")  # fast/cost-effective
 
+def summarize_history_to_profile(raw_history_text: str) -> str:
+    """
+    Returns a compact profile: tone, do/don't, interests, price comfort, phrases, opt-outs.
+    """
+    prompt = f"""
+You are an email personalization assistant. Read the raw email history below and produce a short profile.
+
+Return sections with bullets:
+- Tone
+- Do
+- Don't
+- Interests / categories
+- Price comfort (if evident)
+- Phrases they use
+- Risk flags (complaints, returns, sensitive topics)
+- Compliance/opt-out notes (if any)
+
+Only infer what’s clearly supported; do not fabricate.
+
+--- HISTORY START ---
+{raw_history_text}
+--- HISTORY END ---
+"""
+    r = client.responses.create(model=AI_MODEL, input=prompt)
+    return r.output_text.strip()
+
+
 
 REQUIRED_CUSTOMER_COLS = ["email", "name"]
 SUGGESTED_PRODUCT_COLS = ["name", "price"]  # category/sku/url optional
+def generate_personalized_email(profile: str, customer: dict, recommendations: list,
+                                subject_tpl: str, greeting_tpl: str, intro_tpl: str, footer_tpl: str, sender_name: str) -> tuple[str, str]:
+    # Build a concise product list for the model
+    prod_bullets = []
+    for p in recommendations:
+        name = p.get("name")
+        price = p.get("price")
+        url = p.get("url")
+        piece = f"- {name}"
+        if isinstance(price, (int, float)):
+            piece += f" — £{price:.2f}"
+        if url:
+            piece += f" ({url})"
+        prod_bullets.append(piece)
+    prod_text = "\n".join(prod_bullets) if prod_bullets else "- (no items)"
+
+    sys_rules = """You write short, clear marketing emails that feel human and helpful.
+Follow the provided customer profile strictly; do not invent facts or make promises not given.
+Never imply discounts or availability beyond the product list. Keep to UK spelling if ambiguous.
+Include a natural CTA. Keep to 90–140 words unless profile suggests otherwise."""
+
+    user_prompt = f"""
+CUSTOMER:
+- name: {customer.get('name','')}
+- email: {customer.get('email','')}
+
+PROFILE:
+{profile}
+
+PRODUCT PICKS:
+{prod_text}
+
+TEMPLATES (use as guidance for structure, but adapt tone to profile):
+- Greeting: "{greeting_tpl}"
+- Intro: "{intro_tpl}"
+- Footer: "{footer_tpl}" (sender_name = "{sender_name}")
+
+Write:
+1) A subject line (<= 60 chars), tailored to the profile.
+2) The full email body with greeting, short intro, 2–3 bullets for products, friendly close.
+
+Return in this format:
+
+SUBJECT: <subject line>
+BODY:
+<final body text>
+"""
+    r = client.responses.create(model=AI_MODEL, input=[{"role":"system","content":sys_rules},
+                                                       {"role":"user","content":user_prompt}])
+    txt = r.output_text
+    subj = "Your picks from our latest catalogue"
+    body = txt
+    # Lightweight parse
+    if "BODY:" in txt:
+        parts = txt.split("BODY:", 1)
+        subj_line = parts[0].replace("SUBJECT:", "").strip()
+        body = parts[1].strip()
+        if subj_line:
+            subj = subj_line
+    # Personalize greeting/footer placeholders
+    subj = subj.replace("{name}", customer.get("name",""))
+    body = body.replace("{name}", customer.get("name","")).replace("{sender_name}", sender_name)
+    return subj, body
+
 
 def assert_required_cols(df, required, label):
     missing = [c for c in required if c not in df.columns]
