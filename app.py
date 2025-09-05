@@ -215,6 +215,29 @@ def index():
         as_attachment=True,
         download_name="mail_merge.csv",
     )
+    from google_auth_oauthlib.flow import Flow
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+import json, secrets
+
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+def get_google_flow():
+    client_config = {
+        "web": {
+            "client_id": os.environ["GOOGLE_CLIENT_ID"],
+            "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
+            "redirect_uris": [os.environ["GOOGLE_REDIRECT_URI"]],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token"
+        }
+    }
+    return Flow.from_client_config(
+        client_config=client_config,
+        scopes=GMAIL_SCOPES,
+        redirect_uri=os.environ["GOOGLE_REDIRECT_URI"]
+    )
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
