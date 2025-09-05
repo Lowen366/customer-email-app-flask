@@ -22,17 +22,29 @@ def match_products_to_customers(products_df, customers_df, max_recs=3):
 
         cand = p_sorted
         if preferred:
-            cand = cand[
-                (cand["category_norm"] == preferred)
-                | (cand["name"].str.lower().str.contains(preferred, na=False))
-            ]
+            cand = cand[(cand["category_norm"] == preferred) |
+                        (cand["name"].str.lower().str.contains(preferred, na=False))]
             if cand.empty:
                 cand = p_sorted
         if max_budget is not None:
             cand = cand[cand["price_num"].isna() | (cand["price_num"] <= max_budget)]
 
+        # Simple diversity: prefer unique categories first
+        cand["cat_rank"] = cand["category_norm"].fillna("zzz")
+        cand = cand.sort_values(["cat_rank", "price_num"], ascending=[True, True])
+
+        top = []
+        seen = set()
+        for _, r in cand.iterrows():
+            cat = r.get("category_norm")
+            if cat not in seen or len(seen) < 2:
+                top.append(r)
+                if cat: seen.add(cat)
+            if len(top) >= int(max_recs):
+                break
+
         recs = []
-        for _, r in cand.head(int(max_recs)).iterrows():
+        for r in top:
             recs.append({
                 "name": r.get("name"),
                 "category": r.get("category"),
