@@ -410,15 +410,20 @@ def gmail_sample():
         })
     return {"messages": results}
 
-    @app.after_request
+# ------------------------------------------------------------
+# Prevent caching so users always see the latest version
+# ------------------------------------------------------------
+@app.after_request
 def add_no_cache_headers(response):
-    # force fresh load for all HTML and API responses
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
 
 
+# ------------------------------------------------------------
+# Run the app (local only; Render uses gunicorn in production)
+# ------------------------------------------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
