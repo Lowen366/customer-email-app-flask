@@ -6,6 +6,13 @@ from product_parser import parse_products_from_pdf, parse_products_from_csv
 from matcher import match_products_to_customers
 from email_templates import build_email_for_customer
 
+import os
+from openai import OpenAI
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o-mini")  # fast/cost-effective
+
+
 REQUIRED_CUSTOMER_COLS = ["email", "name"]
 SUGGESTED_PRODUCT_COLS = ["name", "price"]  # category/sku/url optional
 
