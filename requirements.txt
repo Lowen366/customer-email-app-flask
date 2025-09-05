@@ -3,3 +3,6 @@ gunicorn==22.0.0
 pandas==2.2.2
 pdfplumber==0.11.4
 openai>=1.40.0
+google-auth==2.31.0
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.141.0
