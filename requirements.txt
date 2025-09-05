@@ -1,8 +1,18 @@
 Flask==3.0.3
 gunicorn==22.0.0
+
+# Data + PDF parsing
 pandas==2.2.2
 pdfplumber==0.11.4
+
+# AI (optional, safe if no key provided)
 openai>=1.40.0
+
+# Google auth + Gmail API
 google-auth==2.31.0
 google-auth-oauthlib==1.2.0
 google-api-python-client==2.141.0
+google-auth-httplib2==0.2.0   # ✅ needed by googleapiclient
+httplib2==0.22.0              # ✅ also needed for Gmail API
+
+# Email handling (standard library covers most, but smtplib not required here)
