@@ -26,6 +26,27 @@ except Exception:
     OPENAI_ENABLED = False
     client = None
 
+from flask import session
+from googleapiclient.errors import HttpError
+
+def gmail_is_connected() -> bool:
+    return bool(session.get("gmail_creds"))
+
+def gmail_connected_email() -> str | None:
+    data = session.get("gmail_creds")
+    if not data:
+        return None
+    try:
+        creds = Credentials(**data)
+        service = build("gmail", "v1", credentials=creds)
+        prof = service.users().getProfile(userId="me").execute()
+        return prof.get("emailAddress")
+    except HttpError:
+        return None
+    except Exception:
+        return None
+
+
 # Flask
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "devkey")
