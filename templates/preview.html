@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Preview · Customer Email Matcher</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+  <body class="container py-4">
+    <h1 class="mb-3">Preview (first {{ rows|length }} emails)</h1>
+    <p class="text-muted">Looks good? Download the full mail merge file below.</p>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead><tr><th>Email</th><th>Name</th><th>Subject</th><th>Body (excerpt)</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+            <tr>
+              <td>{{ r.email }}</td>
+              <td>{{ r.name }}</td>
+              <td>{{ r.subject }}</td>
+              <td style="max-width:520px; white-space:pre-wrap">{{ r.body[:240] }}{% if r.body|length>240 %}…{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <form method="post" action="{{ url_for('download_csv') }}">
+      <input type="hidden" name="payload" value="{{ payload }}">
+      <button class="btn btn-primary">⬇️ Download mail_merge.csv</button>
+      <a class="btn btn-outline-secondary ms-2" href="{{ url_for('index') }}">← Start over</a>
+    </form>
+  </body>
+</html>
