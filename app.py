@@ -468,6 +468,27 @@ def review_send_all():
 # ============================================================
 # Google OAuth routes (+ sample fetch)
 # ============================================================
+# Shows what values your app will use
+@app.route("/oauth-debug")
+def oauth_debug():
+    return {
+        "GOOGLE_CLIENT_ID": os.environ.get("GOOGLE_CLIENT_ID", ""),
+        "GOOGLE_REDIRECT_URI": os.environ.get("GOOGLE_REDIRECT_URI", "")
+    }
+
+# Shows the exact Google auth URL your app generates (so we can inspect redirect_uri param)
+@app.route("/oauth-authurl")
+def oauth_authurl():
+    flow = get_google_flow()
+    auth_url, state = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent"
+    )
+    return {"auth_url": auth_url, "state": state}
+
+
+
 @app.route("/google/login")
 def google_login():
     flow = get_google_flow()
