@@ -4,6 +4,8 @@ from email.message import EmailMessage
 import pandas as pd
 from flask import Flask, request, render_template, flash, redirect, url_for, session
 
+import requests  # for calling your AI worker API
+
 # ---- Your modules (these are your existing files) ----
 from product_parser import parse_products_from_pdf
 from matcher import match_products_to_customers
@@ -34,6 +36,28 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "devkey")
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
 logging.basicConfig(level=logging.INFO)
+
+WORKER_API = os.getenv("AI_EMAIL_API_URL")  # set in Render → Environment
+
+@app.post("/generate-email")
+def generate_email():
+    """
+    Proxy: website → Flask → AI worker → JSON back
+    """
+    if not WORKER_API:
+        return {"error": "AI_EMAIL_API_URL not set"}, 500
+
+    data = request.get_json(force=True)
+    try:
+        resp = requests.post(
+            f"{WORKER_API}/write-email",
+            json=data,
+            timeout=20,
+            headers={"Content-Type": "application/json"},
+        )
+        return resp.json(), resp.status_code
+    except Exception as e:
+        return {"error": f"Failed to reach AI worker: {e}"}, 502
 
 # ============================================================
 # File types / schema
