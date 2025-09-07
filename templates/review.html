@@ -21,6 +21,14 @@
         <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('index') }}">← Back</a>
       </div>
     </div>
+    <input type="text" name="subject_{{ loop.index0 }}" 
+       value="{{ row.subject }}" 
+       class="form-control form-control-lg" />
+    <textarea name="body_{{ loop.index0 }}" 
+          class="form-control" 
+          rows="6">{{ row.body }}</textarea>
+
+
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
