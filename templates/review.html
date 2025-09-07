@@ -9,10 +9,17 @@
       .status-dot{width:10px;height:10px;border-radius:10px;display:inline-block;margin-right:6px}
       .pending{background:#adb5bd}.approved{background:#0d6efd}.sent{background:#198754}.skipped{background:#6c757d}
       /* make the subject/body cells roomy */
-      td.subject-cell { min-width: 550px; }
+      td.subject-cell { min-width: 400px; }
       td.body-cell    { min-width: 400px; }
       /* big inputs */
-      input.subject-input { width:85%; }
+      input.subject-input { 
+        width:85%; 
+        width:50%;
+        min-height: 5px;   /* ~14–16 lines visible */
+        resize: vertical;    /* user can make it even taller */
+        line-height: 1.35;
+        white-space: pre-wrap;
+      }
       textarea.body-input {
         width:50%;
         min-height: 5px;   /* ~14–16 lines visible */
