@@ -15,6 +15,10 @@ google-api-python-client==2.141.0
 google-auth-httplib2==0.2.0   # ✅ needed by googleapiclient
 httplib2==0.22.0              # ✅ also needed for Gmail API
 openpyxl==3.1.5   # for .xlsx
-xlrd==2.0.1       # for .xls
+xlrd==2.0.1   # for .xls
+
+Flask
+requests
+
 
 # Email handling (standard library covers most, but smtplib not required here)
