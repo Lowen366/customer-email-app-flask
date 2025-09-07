@@ -5,11 +5,29 @@
     <title>Review & Send · Email Matcher</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+      .maxw{max-width:1200px}
       .status-dot{width:10px;height:10px;border-radius:10px;display:inline-block;margin-right:6px}
       .pending{background:#adb5bd}.approved{background:#0d6efd}.sent{background:#198754}.skipped{background:#6c757d}
+      /* make the subject/body cells roomy */
+      td.subject-cell { min-width: 360px; }
+      td.body-cell    { min-width: 640px; }
+      /* big inputs */
+      input.subject-input { width:100%; }
+      textarea.body-input {
+        width:100%;
+        min-height: 320px;   /* ~14–16 lines visible */
+        resize: vertical;    /* user can make it even taller */
+        line-height: 1.35;
+        white-space: pre-wrap;
+      }
+      /* sticky action column on narrow screens */
+      @media (max-width: 992px){
+        td.body-cell { min-width: 100%; }
+      }
     </style>
   </head>
-  <body class="container my-4">
+  <body class="container my-4 maxw">
+
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h1 class="mb-0">Review &amp; Send</h1>
       <div>
@@ -21,15 +39,6 @@
         <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('index') }}">← Back</a>
       </div>
     </div>
-    <input type="text" name="subject_{{ loop.index0 }}" 
-       value="{{ row.subject }}" 
-       class="form-control form-control-lg" />
-<textarea name="body_{{ loop.index0 }}" 
-          class="form-control" 
-          rows="12" 
-          style="min-width: 500px; font-family: monospace;">{{ row.body }}</textarea>
-
-
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -47,7 +56,7 @@
     {% else %}
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="small text-muted">
-          Click **Approve** on the rows you want to send. You can edit the subject/body first.
+          Edit the subject/body as needed. The body box is large and auto-expands while you type.
         </div>
         {% if gmail_connected %}
           <form method="post" action="{{ url_for('review_send_all') }}">
@@ -57,8 +66,16 @@
       </div>
 
       <div class="table-responsive">
-        <table class="table table-sm align-middle">
-          <thead><tr><th>Status</th><th>To</th><th>Name</th><th style="min-width:240px">Subject</th><th>Body</th><th style="width:220px">Actions</th></tr></thead>
+        <table class="table align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="width:120px">Status</th>
+              <th style="width:220px">To / Name</th>
+              <th class="subject-cell">Subject</th>
+              <th class="body-cell">Body</th>
+              <th style="width:220px">Actions</th>
+            </tr>
+          </thead>
           <tbody>
             {% for r in rows %}
               {% set i = loop.index0 %}
@@ -67,65 +84,85 @@
                   {% set st = status[i] %}
                   <span class="status-dot {{ st }}"></span> {{ st }}
                 </td>
-                <td>{{ r.email }}</td>
-                <td>{{ r.name }}</td>
                 <td>
-                  <form class="d-flex" method="post" action="{{ url_for('review_send_one') }}">
-                    <input type="hidden" name="index" value="{{ i }}">
-                    <input class="form-control form-control-sm" name="subject" value="{{ r.subject }}">
+                  <div class="fw-semibold">{{ r.email }}</div>
+                  <div class="text-muted small">{{ r.name }}</div>
                 </td>
-                <td>
-                    <textarea class="form-control form-control-sm" name="body" rows="4" style="white-space:pre-wrap">{{ r.body }}</textarea>
-                </td>
-                <td class="text-nowrap">
-                  {% if gmail_connected %}
-                    <button class="btn btn-success btn-sm mb-1" type="submit">Send</button>
-                  {% else %}
-                    <button class="btn btn-success btn-sm mb-1" disabled>Send</button>
-                  {% endif %}
-                  </form>
 
-                  {% if gmail_connected %}
-                    <form class="d-inline" method="post" action="{{ url_for('review_test_one') }}">
-                      <input type="hidden" name="index" value="{{ i }}">
-                      <input type="hidden" name="subject" value="{{ r.subject }}">
-                      <input type="hidden" name="body" value="{{ r.body }}">
-                      <button class="btn btn-outline-primary btn-sm mb-1" type="submit">Send test to me</button>
-                    </form>
-                  {% endif %}
+                <!-- Main SEND form includes editable Subject + Body -->
+                <form method="post" action="{{ url_for('review_send_one') }}" class="w-100">
+                  <input type="hidden" name="index" value="{{ i }}">
 
-                  {% if status[i] != 'approved' %}
-                    <form class="d-inline" method="post" action="{{ url_for('review_approve') }}">
-                      <input type="hidden" name="index" value="{{ i }}">
-                      <button class="btn btn-outline-secondary btn-sm mb-1" type="submit">Approve</button>
-                    </form>
-                  {% else %}
-                    <form class="d-inline" method="post" action="{{ url_for('review_unapprove') }}">
-                      <input type="hidden" name="index" value="{{ i }}">
-                      <button class="btn btn-outline-warning btn-sm mb-1" type="submit">Unapprove</button>
-                    </form>
-                  {% endif %}
+                  <td class="subject-cell">
+                    <input class="form-control form-control-lg subject-input"
+                           name="subject" value="{{ r.subject }}">
+                  </td>
 
-                  <form class="d-inline" method="post" action="{{ url_for('review_skip_one') }}">
-                    <input type="hidden" name="index" value="{{ i }}">
-                    <button class="btn btn-outline-dark btn-sm mb-1" type="submit">Skip</button>
-                  </form>
-                </td>
+                  <td class="body-cell">
+                    <textarea class="form-control body-input" name="body">{{ r.body }}</textarea>
+                  </td>
+
+                  <td class="text-nowrap">
+                    {% if gmail_connected %}
+                      <button class="btn btn-success btn-sm mb-1" type="submit">Send</button>
+                    {% else %}
+                      <button class="btn btn-success btn-sm mb-1" disabled>Send</button>
+                    {% endif %}
+                </form>
+
+                    {% if gmail_connected %}
+                      <!-- Test send: we copy current edits into these hidden fields right before submit (see JS below) -->
+                      <form class="d-inline test-form" method="post" action="{{ url_for('review_test_one') }}">
+                        <input type="hidden" name="index" value="{{ i }}">
+                        <input type="hidden" name="subject" value="{{ r.subject }}">
+                        <input type="hidden" name="body" value="{{ r.body }}">
+                        <button class="btn btn-outline-primary btn-sm mb-1 test-btn" type="submit">Send test to me</button>
+                      </form>
+                    {% endif %}
+
+                    {% if status[i] != 'approved' %}
+                      <form class="d-inline" method="post" action="{{ url_for('review_approve') }}">
+                        <input type="hidden" name="index" value="{{ i }}">
+                        <button class="btn btn-outline-secondary btn-sm mb-1" type="submit">Approve</button>
+                      </form>
+                    {% else %}
+                      <form class="d-inline" method="post" action="{{ url_for('review_unapprove') }}">
+                        <input type="hidden" name="index" value="{{ i }}">
+                        <button class="btn btn-outline-warning btn-sm mb-1" type="submit">Unapprove</button>
+                      </form>
+                    {% endif %}
+
+                    <form class="d-inline" method="post" action="{{ url_for('review_skip_one') }}">
+                      <input type="hidden" name="index" value="{{ i }}">
+                      <button class="btn btn-outline-dark btn-sm mb-1" type="submit">Skip</button>
+                    </form>
+                  </td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+      // Auto-resize all body textareas to fit content (no inner scrollbars)
+      document.querySelectorAll('textarea.body-input').forEach(el => {
+        const fit = () => { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; };
+        fit();
+        el.addEventListener('input', fit);
+      });
+
+      // When "Send test to me" is clicked, copy the current edits into the hidden fields
+      document.querySelectorAll('.test-form').forEach(form => {
+        form.addEventListener('submit', (e) => {
+          const row = form.closest('tr');
+          const subj = row.querySelector('input[name="subject"]')?.value || '';
+          const body = row.querySelector('textarea[name="body"]')?.value || '';
+          form.querySelector('input[name="subject"]').value = subj;
+          form.querySelector('input[name="body"]').value = body;
+        });
+      });
+    </script>
   </body>
 </html>
-
-<script>
-document.querySelectorAll('textarea').forEach(el => {
-  el.addEventListener('input', () => {
-    el.style.height = 'auto';
-    el.style.height = (el.scrollHeight) + 'px';
-  });
-});
-</script>
-
