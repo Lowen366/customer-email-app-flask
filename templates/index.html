@@ -3,45 +3,29 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF → Customer Email Matcher</title>
+    <title>Customer Email Matcher</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-      .card { border-radius: 16px; }
-      .drop { border: 2px dashed #cfd6e4; border-radius: 12px; padding: 18px; background: #f8fafc; }
-      .step { font-weight: 700; color: #6c5ce7; }
-      .muted { color:#6c757d; }
-      .brand { font-weight: 800; letter-spacing:.2px; }
-      .pill { font-size:.8rem; background:#eef2ff; color:#3c3cf0; border-radius:999px; padding:.25rem .6rem; }
-      .btn-primary { border-radius: 10px; font-weight: 700; }
-      .hint-list li { margin-bottom:.35rem; }
-      .form-label { font-weight: 600; }
-      .maxw { max-width: 1100px; }
-      pre.sample { background:#0f172a; color:#e2e8f0; padding:12px; border-radius:10px; font-size:.85rem; overflow:auto; }
-      .divider { border-top:1px solid #e9ecef; margin: 18px 0; }
+      .maxw{max-width:1100px}
+      .brand{font-weight:800;letter-spacing:.2px}
+      .hero h1{font-weight:800;letter-spacing:.3px}
+      .card{border-radius:14px}
     </style>
   </head>
   <body>
-    <!-- ✅ NEW NAVBAR with Google connect status -->
+
+    <!-- Top bar with Google status -->
     <nav class="navbar bg-white border-bottom">
       <div class="container maxw d-flex justify-content-between align-items-center">
+        <span class="navbar-brand brand">📧 Customer Email Matcher</span>
         <div class="d-flex align-items-center gap-2">
-          <span class="navbar-brand brand">📧 Customer Email Matcher</span>
           {% if gmail_connected %}
             <span class="badge text-bg-success">● Connected</span>
-          {% else %}
-            <span class="badge text-bg-secondary">○ Not connected</span>
-          {% endif %}
-        </div>
-
-        <div class="d-flex align-items-center gap-2">
-          {% if gmail_connected %}
-            <span class="text-muted small">
-              Signed in as <strong>{{ gmail_email or "Google user" }}</strong>
-            </span>
+            <span class="text-muted small">Signed in as <strong>{{ gmail_email or "Google user" }}</strong></span>
             <a class="btn btn-outline-secondary btn-sm" href="/google/logout">Disconnect</a>
           {% else %}
+            <span class="badge text-bg-secondary me-2">○ Not connected</span>
             <a class="btn btn-danger" href="/google/login">
-              <!-- Google "G" icon SVG -->
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" style="margin:-2px 6px 0 0" viewBox="0 0 48 48">
                 <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.9 31.9 29.4 35 24 35c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 3l5.7-5.7C33.5 5.1 28.9 3 24 3 12.4 3 3 12.4 3 24s9.4 21 21 21c11.6 0 20-9 20-21 0-1.3-.1-2.7-.4-3.5z"/>
                 <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 18.9 13 24 13c3 0 5.7 1.1 7.8 3l5.7-5.7C33.5 5.1 28.9 3 24 3 15.5 3 8.3 7.9 6.3 14.7z"/>
@@ -62,30 +46,84 @@
           {% for category, message in messages %}
             <div class="alert alert-{{ 'danger' if category=='error' else category }} alert-dismissible fade show" role="alert">
               {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
           {% endfor %}
         {% endif %}
       {% endwith %}
 
-      <div class="text-center mb-4">
-        <h1 class="fw-bold">Turn your catalogue into personalised emails</h1>
-        <p class="muted">Upload a <strong>Products CSV</strong> (or PDF) and a <strong>Customers CSV</strong>. We’ll generate a <code>mail_merge.csv</code> you can send via Gmail/Outlook or your ESP.</p>
-      </div>
+      <section class="hero text-center mb-4">
+        <h1 class="display-5">Turn your catalogue into personalised emails</h1>
+        <p class="text-muted mb-0">
+          Upload a <strong>Products CSV</strong> (or PDF) and a <strong>Customers CSV</strong>. We’ll generate a
+          <code>mail_merge.csv</code> you can send via Gmail/Outlook or your ESP.
+        </p>
+      </section>
 
-      <!-- ✅ Privacy note -->
+      <!-- Privacy note -->
       <div class="alert alert-light border small" role="alert">
         <strong>Privacy:</strong> Connecting Google is optional. If you connect, we only read your mailbox to build better email drafts for
         <em>you</em>. Nothing is sent without your action, and you can disconnect anytime.
       </div>
 
-      <!-- rest of your form stays the same -->
-      <form action="/" method="POST" enctype="multipart/form-data">
-        <!-- Step 1: Products -->
-        <!-- Step 2: Customers -->
-        <!-- Step 3: Email settings -->
-        <!-- (use your existing form content here) -->
+      <!-- Upload form -->
+      <form action="{{ url_for('index') }}" method="POST" enctype="multipart/form-data" class="card shadow-sm p-3">
+        <div class="row g-4">
+          <!-- Left: Products -->
+          <div class="col-12 col-lg-6">
+            <label class="form-label">Products CSV (recommended)</label>
+            <input class="form-control" type="file" name="prod_csv" accept=".csv">
+
+            <div class="text-center text-muted my-2">— or —</div>
+
+            <label class="form-label">Product PDF (best effort)</label>
+            <input class="form-control" type="file" name="prod_pdf" accept="application/pdf">
+            <div class="form-text">
+              CSV columns: <code>name</code> (required), <code>price</code>; optional <code>category</code>, <code>sku</code>, <code>url</code>
+            </div>
+          </div>
+
+          <!-- Right: Customers + optional history -->
+          <div class="col-12 col-lg-6">
+            <label class="form-label">Customers CSV <span class="text-danger">*</span></label>
+            <input class="form-control" type="file" name="cust_csv" accept=".csv" required>
+            <div class="form-text">
+              Columns: <code>email</code>, <code>name</code>; optional <code>preferred_category</code>, <code>max_budget</code>
+            </div>
+
+            <details class="mt-3">
+              <summary class="small">Improve results (optional): upload past emails (.txt or .csv)</summary>
+              <input class="form-control mt-2" type="file" name="history_file" accept=".csv,.txt">
+            </details>
+          </div>
+
+          <!-- Settings row -->
+          <div class="col-12">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">Sender name</label>
+                <input class="form-control" type="text" name="sender_name" value="Customer Success">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Max products per customer</label>
+                <input class="form-control" type="number" name="max_recs" value="3" min="1" max="10">
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <button class="btn btn-primary btn-lg" type="submit">Generate &amp; Preview</button>
+          </div>
+        </div>
       </form>
+
+      <!-- Hints -->
+      <div class="text-muted small mt-3">
+        <ul class="mb-0">
+          <li>You can upload either <strong>Products CSV</strong> or a <strong>Product PDF</strong> (CSV is more accurate).</li>
+          <li>Google connection only matters if you want to <strong>send</strong> directly from Gmail after review.</li>
+        </ul>
+      </div>
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
