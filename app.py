@@ -41,8 +41,10 @@ app.secret_key = os.environ.get("SECRET_KEY", "devkey")
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
 logging.basicConfig(level=logging.INFO)
 
-ALLOWED_CSV = {"csv"}
-ALLOWED_PDF = {"pdf"}
+ALLOWED_CSV   = {"csv"}
+ALLOWED_PDF   = {"pdf"}
+ALLOWED_EXCEL = {"xlsx", "xls"}
+
 
 def allowed(filename, exts):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in exts
