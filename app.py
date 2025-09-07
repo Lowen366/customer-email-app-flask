@@ -1,14 +1,10 @@
-import os, io, json, base64, logging
-from datetime import datetime
+import os, json, base64, logging
 from email.message import EmailMessage
 
 import pandas as pd
-from flask import (
-    Flask, request, render_template, send_file,
-    flash, redirect, url_for, session
-)
+from flask import Flask, request, render_template, flash, redirect, url_for, session
 
-# ---- Your app modules ----
+# ---- Your modules (these are your existing files) ----
 from product_parser import parse_products_from_pdf
 from matcher import match_products_to_customers
 from email_templates import build_email_for_customer
@@ -17,17 +13,15 @@ from email_templates import build_email_for_customer
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 
-# ---- Optional AI (safe: won’t crash if not configured) ----
+# ---- Optional AI (safe fallback) ----
 OPENAI_ENABLED = False
 client = None
 AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o-mini")
 try:
     from openai import OpenAI
-    _key = os.environ.get("OPENAI_API_KEY")
-    if _key:
-        client = OpenAI(api_key=_key)
+    if os.environ.get("OPENAI_API_KEY"):
+        client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
         OPENAI_ENABLED = True
 except Exception:
     OPENAI_ENABLED = False
@@ -41,40 +35,42 @@ app.secret_key = os.environ.get("SECRET_KEY", "devkey")
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
 logging.basicConfig(level=logging.INFO)
 
+# ============================================================
+# File types / schema
+# ============================================================
 ALLOWED_CSV   = {"csv"}
 ALLOWED_PDF   = {"pdf"}
 ALLOWED_EXCEL = {"xlsx", "xls"}
-  
-def read_table_upload(file_storage):
-    """Return a pandas DataFrame from an uploaded CSV/XLSX/XLS file."""
-    fname = file_storage.filename or ""
-    ext = fname.rsplit(".", 1)[-1].lower()
-    if ext in ALLOWED_CSV:
-        return pd.read_csv(file_storage)
-    if ext in ALLOWED_EXCEL:
-        if ext == "xlsx":
-            return pd.read_excel(file_storage, engine="openpyxl")  # first sheet
-        else:  # xls
-            return pd.read_excel(file_storage, engine="xlrd")
-    raise ValueError("Unsupported file type. Please upload .csv, .xlsx, or .xls")
-
-
-def allowed(filename, exts):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in exts
-    
-
-
 
 REQUIRED_CUSTOMER_COLS = ["email", "name"]
-SUGGESTED_PRODUCT_COLS = ["name", "price"]  # others optional
+SUGGESTED_PRODUCT_COLS = ["name", "price"]  # other cols optional
 
-def assert_required_cols(df, required, label):
+def allowed(filename: str, exts: set[str]) -> bool:
+    return "." in (filename or "") and filename.rsplit(".", 1)[1].lower() in exts
+
+def assert_required_cols(df: pd.DataFrame, required: list[str], label: str):
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"{label} file is missing required column(s): {', '.join(missing)}")
 
+# -------------------------------
+# Excel/CSV loader helper
+# -------------------------------
+def read_table_upload(file_storage) -> pd.DataFrame:
+    """Return a pandas DataFrame from an uploaded CSV/XLSX/XLS file."""
+    fname = (file_storage.filename or "").lower()
+    ext = fname.rsplit(".", 1)[-1]
+    if ext in ALLOWED_CSV:
+        return pd.read_csv(file_storage)
+    if ext in ALLOWED_EXCEL:
+        if ext == "xlsx":
+            return pd.read_excel(file_storage, engine="openpyxl")
+        else:  # xls
+            return pd.read_excel(file_storage, engine="xlrd")
+    raise ValueError("Unsupported file type. Please upload .csv, .xlsx, or .xls")
+
 # ============================================================
-# Gmail OAuth (now includes SEND permission)
+# Gmail OAuth (includes SEND)
 # ============================================================
 GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -142,34 +138,16 @@ DEFAULT_FOOTER = "If you have any questions, just hit reply.\n\nBest,\n{sender_n
 def summarize_history_to_profile(raw_history_text: str) -> str:
     if not OPENAI_ENABLED or not raw_history_text.strip():
         return ("- Tone: friendly, concise\n"
-                "- Do: keep emails short, suggest 2–3 items, be helpful\n"
-                "- Don't: promise discounts or availability not provided\n"
-                "- Interests: infer from preferences if present\n")
-    prompt = f"""
-You are an email personalization assistant. Read the raw email history below and produce a compact profile.
-
-Return sections with bullets:
-- Tone
-- Do
-- Don't
-- Interests / categories
-- Price comfort (if evident)
-- Phrases they use
-- Risk flags (complaints, returns, sensitive topics)
-- Compliance/opt-out notes (if any)
-
-Only infer what’s clearly supported; do not fabricate.
-
---- HISTORY START ---
-{raw_history_text}
---- HISTORY END ---
-"""
+                "- Do: suggest 2–3 items\n"
+                "- Don't: overpromise or invent discounts\n")
     try:
-        r = client.responses.create(model=AI_MODEL, input=prompt)
-        return (r.output_text or "").strip() or "Tone: friendly; Do: be concise; Don't: overpromise."
-    except Exception as e:
-        app.logger.warning(f"AI summarize failed: {e}")
-        return "Tone: friendly; Do: be concise; Don't: overpromise."
+        r = client.responses.create(
+            model=AI_MODEL,
+            input=f"Summarise this email history into a short profile:\n\n{raw_history_text}"
+        )
+        return (r.output_text or "").strip() or "Tone: friendly; Do: be concise; Don't overpromise."
+    except Exception:
+        return "Tone: friendly; Do: be concise; Don't overpromise."
 
 def generate_personalized_email(profile: str, customer: dict, recommendations: list,
                                 subject_tpl: str, greeting_tpl: str, intro_tpl: str,
@@ -183,7 +161,6 @@ def generate_personalized_email(profile: str, customer: dict, recommendations: l
         )
         return subject, body
 
-    # Prepare product bullets
     bullets = []
     for p in recommendations:
         name = p.get("name")
@@ -196,58 +173,34 @@ def generate_personalized_email(profile: str, customer: dict, recommendations: l
             line += f" ({url})"
         bullets.append(line)
     prod_text = "\n".join(bullets) if bullets else "- (no items)"
-
-    sys_rules = """You write short, clear marketing emails that feel human and helpful.
-Follow the provided customer profile strictly; do not invent facts or make promises not given.
-Never imply discounts or availability beyond the product list. Use UK spelling if ambiguous.
-Include a natural CTA and keep 90–140 words unless profile suggests otherwise."""
-
-    user_prompt = f"""
-CUSTOMER:
-- name: {customer.get('name','')}
-- email: {customer.get('email','')}
-
-PROFILE:
-{profile}
-
-PRODUCT PICKS:
+    prompt = f"""
+CUSTOMER: {customer}
+PROFILE: {profile}
+PRODUCTS:
 {prod_text}
 
-TEMPLATES (structure guide; adapt tone):
-- Greeting: "{greeting_tpl}"
-- Intro: "{intro_tpl}"
-- Footer: "{footer_tpl}" (sender_name = "{sender_name}")
-
-Write:
-1) SUBJECT (<= 60 chars), tailored to the profile.
-2) BODY with greeting, short intro, 2–3 bullets for products, friendly close.
-
-Return in this format:
-
-SUBJECT: <subject line>
+Return:
+SUBJECT: <60 chars
 BODY:
-<final body text>
+<email body with greeting, 2–3 bullets, closing>
 """
     try:
         r = client.responses.create(
             model=AI_MODEL,
-            input=[{"role": "system", "content": sys_rules},
-                   {"role": "user", "content": user_prompt}]
+            input=prompt
         )
         txt = r.output_text or ""
         subject = subject_tpl
         body = txt
         if "BODY:" in txt:
-            parts = txt.split("BODY:", 1)
-            subject_line = parts[0].replace("SUBJECT:", "").strip()
-            body = parts[1].strip()
-            if subject_line:
-                subject = subject_line
+            head, body = txt.split("BODY:", 1)
+            head = head.replace("SUBJECT:", "").strip()
+            if head:
+                subject = head
         subject = subject.replace("{name}", customer.get("name",""))
         body = body.replace("{name}", customer.get("name","")).replace("{sender_name}", sender_name)
         return subject, body
-    except Exception as e:
-        app.logger.warning(f"AI generate failed: {e}")
+    except Exception:
         subject = subject_tpl.format(name=customer.get("name",""))
         body = build_email_for_customer(
             customer=customer, recommendations=recommendations,
@@ -257,7 +210,7 @@ BODY:
         return subject, body
 
 # ============================================================
-# Errors, Health, No-cache
+# Errors / health / no-cache
 # ============================================================
 @app.errorhandler(413)
 def too_large(_e):
@@ -276,7 +229,7 @@ def add_no_cache_headers(response):
     return response
 
 # ============================================================
-# Main page: simplified UI (AI writes copy; no template fields)
+# Main page (GET shows form; POST handles uploads)
 # ============================================================
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -287,39 +240,37 @@ def index():
             gmail_email=gmail_connected_email(),
         )
 
-    # ---- Minimal inputs (AI handles subject/body) ----
+    # ---------- POST: handle upload ----------
     sender_name = request.form.get("sender_name", "Customer Success")
     try:
         max_recs = int(request.form.get("max_recs", "3"))
     except ValueError:
         max_recs = 3
 
-    # ---- Files ----
-    prod_pdf = request.files.get("prod_pdf")
-    prod_csv = request.files.get("prod_csv")
-    cust_csv = request.files.get("cust_csv")
-    history  = request.files.get("history_file")  # optional
-
-    if not cust_csv or not allowed(cust_csv.filename, ALLOWED_CSV):
-        flash("Please upload a valid Customers CSV.", "error")
-        return redirect(url_for("index"))
+    prod_pdf = request.files.get("prod_pdf")    # optional
+    prod_csv = request.files.get("prod_csv")    # CSV/XLSX/XLS
+    cust_csv = request.files.get("cust_csv")    # CSV/XLSX/XLS (required)
+    history  = request.files.get("history_file")
 
     # Customers
+    if not cust_csv:
+        flash("Please upload a Customers CSV/Excel file.", "error")
+        return redirect(url_for("index"))
     try:
-        customers_df = pd.read_csv(cust_csv)
+        customers_df = read_table_upload(cust_csv)
         assert_required_cols(customers_df, REQUIRED_CUSTOMER_COLS, "Customers")
     except Exception as e:
-        flash(f"Could not read Customers CSV: {e}", "error")
+        flash(f"Could not read Customers file: {e}", "error")
         return redirect(url_for("index"))
 
-    # Products
+    # Products (CSV/Excel or PDF)
     try:
-        if prod_csv and allowed(prod_csv.filename, ALLOWED_CSV):
-            products_df = pd.read_csv(prod_csv)
+        if prod_csv and allowed(prod_csv.filename, ALLOWED_CSV | ALLOWED_EXCEL):
+            products_df = read_table_upload(prod_csv)
         elif prod_pdf and allowed(prod_pdf.filename, ALLOWED_PDF):
             products_df, _ = parse_products_from_pdf(prod_pdf)
         else:
-            flash("Please upload either a Products CSV or a Product PDF.", "error")
+            flash("Please upload either a Products CSV/Excel or a Product PDF.", "error")
             return redirect(url_for("index"))
         assert_required_cols(products_df, SUGGESTED_PRODUCT_COLS, "Products")
     except Exception as e:
@@ -333,7 +284,7 @@ def index():
     products_df["price"] = pd.to_numeric(products_df["price"], errors="coerce")
     products_df = products_df.dropna(subset=["name"]).copy()
 
-    # Optional: build ONE profile from uploaded history text (v1)
+    # Optional history → single profile
     history_blob = ""
     if history:
         try:
@@ -342,10 +293,8 @@ def index():
             history_blob = ""
     profile_text = summarize_history_to_profile(history_blob) if history_blob else ""
 
-    # Match products → recommendations per customer
+    # Match + build drafts
     matched = match_products_to_customers(products_df, customers_df, max_recs=max_recs)
-
-    # Build email drafts
     rows = []
     for _, row in matched.iterrows():
         cust = row["customer"]
@@ -366,12 +315,12 @@ def index():
             )
         rows.append({
             "email": (cust.get("email") or "").strip(),
-            "name": (cust.get("name") or "").strip(),
+            "name":  (cust.get("name")  or "").strip(),
             "subject": subject,
             "body": body
         })
 
-    # Save drafts in session → go to Review page
+    # Save for review
     session["review_rows"] = rows
     session["review_status"] = ["pending"] * len(rows)
     return redirect(url_for("review"))
@@ -446,21 +395,18 @@ def review_send_one():
         flash("Invalid item.", "error")
         return redirect(url_for("review"))
 
-    # capture edits
+    # persist edits
     subject = request.form.get("subject", rows[i]["subject"])
     body    = request.form.get("body", rows[i]["body"])
-    to_addr = rows[i]["email"]
-
-    # persist edits in session
     rows[i]["subject"] = subject
     rows[i]["body"] = body
     session["review_rows"] = rows
 
     try:
-        gmail_send(to_addr, subject, body)
+        gmail_send(rows[i]["email"], subject, body)
         status[i] = "sent"
         session["review_status"] = status
-        flash(f"Sent to {to_addr}", "success")
+        flash(f"Sent to {rows[i]['email']}", "success")
     except Exception as e:
         flash(f"Send failed: {e}", "error")
     return redirect(url_for("review"))
@@ -484,29 +430,8 @@ def review_send_all():
     return redirect(url_for("review"))
 
 # ============================================================
-# Google OAuth routes (+ sample fetch)
+# Google OAuth routes (+ tiny debug if needed)
 # ============================================================
-# Shows what values your app will use
-@app.route("/oauth-debug")
-def oauth_debug():
-    return {
-        "GOOGLE_CLIENT_ID": os.environ.get("GOOGLE_CLIENT_ID", ""),
-        "GOOGLE_REDIRECT_URI": os.environ.get("GOOGLE_REDIRECT_URI", "")
-    }
-
-# Shows the exact Google auth URL your app generates (so we can inspect redirect_uri param)
-@app.route("/oauth-authurl")
-def oauth_authurl():
-    flow = get_google_flow()
-    auth_url, state = flow.authorization_url(
-        access_type="offline",
-        include_granted_scopes="true",
-        prompt="consent"
-    )
-    return {"auth_url": auth_url, "state": state}
-
-
-
 @app.route("/google/login")
 def google_login():
     flow = get_google_flow()
@@ -538,35 +463,24 @@ def google_logout():
     flash("Google disconnected.", "success")
     return redirect(url_for("index"))
 
-@app.route("/gmail/sample")
-def gmail_sample():
-    data = session.get("gmail_creds")
-    if not data:
-        flash("Please connect Google first.", "error")
-        return redirect(url_for("index"))
-    try:
-        creds = Credentials(**data)
-        service = build("gmail", "v1", credentials=creds)
-        resp = service.users().messages().list(userId="me", maxResults=5, labelIds=["INBOX"]).execute()
-        ids = [m["id"] for m in resp.get("messages", [])]
-        results = []
-        for mid in ids:
-            msg = service.users().messages().get(
-                userId="me", id=mid, format="metadata", metadataHeaders=["Subject","From"]
-            ).execute()
-            headers = {h["name"]: h["value"] for h in msg.get("payload", {}).get("headers", [])}
-            results.append({
-                "id": mid,
-                "from": headers.get("From",""),
-                "subject": headers.get("Subject",""),
-                "snippet": msg.get("snippet","")
-            })
-        return {"messages": results}
-    except Exception as e:
-        return {"error": str(e)}, 500
+# Optional debug (remove later)
+@app.route("/oauth-debug")
+def oauth_debug():
+    return {
+        "GOOGLE_CLIENT_ID": os.environ.get("GOOGLE_CLIENT_ID", ""),
+        "GOOGLE_REDIRECT_URI": os.environ.get("GOOGLE_REDIRECT_URI", "")
+    }
+
+@app.route("/oauth-authurl")
+def oauth_authurl():
+    flow = get_google_flow()
+    auth_url, state = flow.authorization_url(
+        access_type="offline", include_granted_scopes="true", prompt="consent"
+    )
+    return {"auth_url": auth_url, "state": state}
 
 # ============================================================
-# Local dev runner (Render uses gunicorn)
+# Local runner (Render uses gunicorn)
 # ============================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
