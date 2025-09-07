@@ -116,6 +116,115 @@
           </div>
         </div>
       </form>
+      <!-- === AI Email Preview (uses your AI worker) === -->
+<section class="card shadow-sm p-3 mt-4">
+  <h2 class="h5 mb-3">AI Email Preview</h2>
+
+  <div class="row g-3">
+    <div class="col-md-4">
+      <label class="form-label">Goal</label>
+      <select id="ai-goal" class="form-select">
+        <option value="win-back">win-back</option>
+        <option value="onboarding">onboarding</option>
+        <option value="upsell">upsell</option>
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">Offer (optional)</label>
+      <input id="ai-offer" class="form-control" placeholder="Free shipping this week">
+    </div>
+    <div class="col-md-4">
+      <label class="form-label">CTA URL</label>
+      <input id="ai-cta" class="form-control" value="https://yourwebsite.com/shop">
+    </div>
+
+    <div class="col-md-6">
+      <label class="form-label">Customer Name</label>
+      <input id="ai-name" class="form-control" value="Avery">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Customer ID</label>
+      <input id="ai-id" class="form-control" value="cus_1">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Locale</label>
+      <input id="ai-locale" class="form-control" value="en-GB">
+    </div>
+
+    <div class="col-12 d-flex gap-2">
+      <button id="ai-generate" type="button" class="btn btn-primary">Generate with AI</button>
+      <div id="ai-status" class="text-muted small d-flex align-items-center"></div>
+    </div>
+  </div>
+
+  <hr class="my-3">
+
+  <div class="row g-3">
+    <div class="col-md-6">
+      <h3 class="h6">JSON Result</h3>
+      <pre id="ai-json" class="bg-dark text-white p-3" style="height:260px; overflow:auto;"></pre>
+    </div>
+    <div class="col-md-6">
+      <h3 class="h6">Email Preview</h3>
+      <div id="ai-preview" class="border rounded p-3" style="height:260px; overflow:auto;">
+        <em class="text-muted">Click “Generate with AI” to see a preview here.</em>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  async function callAIGenerator(payload) {
+    const res = await fetch("/generate-email", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Server ${res.status}: ${text}`);
+    }
+    return await res.json();
+  }
+
+  document.getElementById("ai-generate").addEventListener("click", async () => {
+    const status = document.getElementById("ai-status");
+    const out = document.getElementById("ai-json");
+    const preview = document.getElementById("ai-preview");
+
+    const payload = {
+      goal: document.getElementById("ai-goal").value,
+      offer: document.getElementById("ai-offer").value || null,
+      cta_url: document.getElementById("ai-cta").value,
+      customer: {
+        id: document.getElementById("ai-id").value,
+        name: document.getElementById("ai-name").value,
+        locale: document.getElementById("ai-locale").value
+      }
+    };
+
+    status.textContent = "Generating…";
+    out.textContent = "";
+    preview.innerHTML = "<em class='text-muted'>Generating…</em>";
+
+    try {
+      const data = await callAIGenerator(payload);
+      out.textContent = JSON.stringify(data, null, 2);
+      preview.innerHTML = `
+        <h4 class="h6 mb-1">${data.subject}</h4>
+        <p class="text-muted small">${data.preheader}</p>
+        ${data.body_html}
+        <p class="mt-2"><a class="btn btn-outline-primary btn-sm" href="${data.cta_url}" target="_blank">${data.cta_text}</a></p>
+      `;
+      status.textContent = "Done.";
+    } catch (e) {
+      out.textContent = (e.message || String(e));
+      preview.innerHTML = "<span class='text-danger'>Failed to generate.</span>";
+      status.textContent = "Error.";
+    }
+  });
+</script>
+
 
       <!-- Hints -->
       <div class="text-muted small mt-3">
