@@ -71,8 +71,8 @@
         <div class="row g-4">
           <!-- Left: Products -->
           <div class="col-12 col-lg-6">
-            <label class="form-label">Products CSV (recommended)</label>
-            <input class="form-control" type="file" name="prod_csv" accept=".csv">
+            <label class="form-label">Products CSV and Excel </label>
+<input class="form-control" type="file" name="prod_csv" accept=".csv,.xlsx,.xls">
 
             <div class="text-center text-muted my-2">— or —</div>
 
@@ -86,7 +86,8 @@
           <!-- Right: Customers + optional history -->
           <div class="col-12 col-lg-6">
             <label class="form-label">Customers CSV <span class="text-danger">*</span></label>
-            <input class="form-control" type="file" name="cust_csv" accept=".csv" required>
+            <input class="form-control" type="file" name="cust_csv" accept=".csv,.xlsx,.xls" >required>
+      
             <div class="form-text">
               Columns: <code>email</code>, <code>name</code>; optional <code>preferred_category</code>, <code>max_budget</code>
             </div>
