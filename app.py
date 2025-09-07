@@ -44,12 +44,8 @@ logging.basicConfig(level=logging.INFO)
 ALLOWED_CSV   = {"csv"}
 ALLOWED_PDF   = {"pdf"}
 ALLOWED_EXCEL = {"xlsx", "xls"}
-
-
-def allowed(filename, exts):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in exts
-    
-    def read_table_upload(file_storage):
+  
+def read_table_upload(file_storage):
     """Return a pandas DataFrame from an uploaded CSV/XLSX/XLS file."""
     fname = file_storage.filename or ""
     ext = fname.rsplit(".", 1)[-1].lower()
@@ -61,6 +57,12 @@ def allowed(filename, exts):
         else:  # xls
             return pd.read_excel(file_storage, engine="xlrd")
     raise ValueError("Unsupported file type. Please upload .csv, .xlsx, or .xls")
+
+
+def allowed(filename, exts):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in exts
+    
+
 
 
 REQUIRED_CUSTOMER_COLS = ["email", "name"]
