@@ -55,7 +55,7 @@
       <section class="hero text-center mb-4">
         <h1 class="display-5">Turn your catalogue into personalised emails</h1>
         <p class="text-muted mb-0">
-          Upload a <strong>Products CSV</strong> (or PDF) and a <strong>Customers CSV</strong>. We’ll generate a
+          Upload a <strong>Products CSV/Excel</strong> (or PDF) and a <strong>Customers CSV/Excel</strong>. We’ll generate a
           <code>mail_merge.csv</code> you can send via Gmail/Outlook or your ESP.
         </p>
       </section>
@@ -71,23 +71,22 @@
         <div class="row g-4">
           <!-- Left: Products -->
           <div class="col-12 col-lg-6">
-            <label class="form-label">Products CSV and Excel </label>
-<input class="form-control" type="file" name="prod_csv" accept=".csv,.xlsx,.xls">
+            <label class="form-label">Products CSV/Excel (recommended)</label>
+            <input class="form-control" type="file" name="prod_csv" accept=".csv,.xlsx,.xls">
 
             <div class="text-center text-muted my-2">— or —</div>
 
             <label class="form-label">Product PDF (best effort)</label>
             <input class="form-control" type="file" name="prod_pdf" accept="application/pdf">
             <div class="form-text">
-              CSV columns: <code>name</code> (required), <code>price</code>; optional <code>category</code>, <code>sku</code>, <code>url</code>
+              Columns: <code>name</code> (required), <code>price</code>; optional <code>category</code>, <code>sku</code>, <code>url</code>
             </div>
           </div>
 
           <!-- Right: Customers + optional history -->
           <div class="col-12 col-lg-6">
-            <label class="form-label">Customers CSV <span class="text-danger">*</span></label>
-            <input class="form-control" type="file" name="cust_csv" accept=".csv,.xlsx,.xls" >required>
-      
+            <label class="form-label">Customers CSV/Excel <span class="text-danger">*</span></label>
+            <input class="form-control" type="file" name="cust_csv" accept=".csv,.xlsx,.xls" required>
             <div class="form-text">
               Columns: <code>email</code>, <code>name</code>; optional <code>preferred_category</code>, <code>max_budget</code>
             </div>
@@ -121,7 +120,7 @@
       <!-- Hints -->
       <div class="text-muted small mt-3">
         <ul class="mb-0">
-          <li>You can upload either <strong>Products CSV</strong> or a <strong>Product PDF</strong> (CSV is more accurate).</li>
+          <li>You can upload either <strong>Products CSV/Excel</strong> or a <strong>Product PDF</strong> (CSV/Excel is more accurate).</li>
           <li>Google connection only matters if you want to <strong>send</strong> directly from Gmail after review.</li>
         </ul>
       </div>
