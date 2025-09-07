@@ -12,7 +12,15 @@
       td.subject-cell { min-width: 200px; }
       td.body-cell    { min-width: 400px; }
       /* big inputs */
-      input.subject-input { width:200%}
+      iinput.subject-input,
+textarea.subject-input {
+  width: 50%;             /* same as body-input */
+  min-height: 5em;        /* give it height like textarea */
+  resize: vertical;       /* let the user expand it */
+  line-height: 1.35;
+  white-space: pre-wrap;
+}
+
       textarea.body-input {
         width:50%;
         min-height: 5px;   /* ~14–16 lines visible */
