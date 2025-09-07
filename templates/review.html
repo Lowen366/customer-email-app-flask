@@ -12,22 +12,15 @@
       td.subject-cell { min-width: 200px; }
       td.body-cell    { min-width: 400px; }
       /* big inputs */
-      iinput.subject-input,
-textarea.subject-input {
-  width: 80%;             /* same as body-input */
-  min-height: 5em;        /* give it height like textarea */
-  resize: vertical;       /* let the user expand it */
+   textarea.subject-input,
+textarea.body-input {
+  width: 50%;
+  min-height: 5em;      /* makes it tall like body box */
+  resize: vertical;     /* user can drag bigger */
   line-height: 1.35;
   white-space: pre-wrap;
 }
 
-      textarea.body-input {
-        width:80%;
-        min-height: 5px;   /* ~14–16 lines visible */
-        resize: vertical;    /* user can make it even taller */
-        line-height: 1.35;
-        white-space: pre-wrap;
-      }
       /* sticky action column on narrow screens */
       @media (max-width: 992px){
         td.body-cell { min-width: 100%; }
