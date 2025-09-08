@@ -1,10 +1,10 @@
-import os, json, base64, logging, io, csv, time
+import os, json, base64, logging, time
 from email.message import EmailMessage
 from typing import List, Dict, Any, Optional
 
 import pandas as pd
-import requests  # call AI worker
-from flask import Flask, request, render_template, flash, redirect, url_for, session, jsonify
+import requests
+from flask import Flask, request, render_template, flash, redirect, url_for, session
 
 # ---- Your modules (existing) ----
 from product_parser import parse_products_from_pdf
@@ -16,7 +16,7 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-# ---- Optional OpenAI (kept as a fallback) ----
+# ---- Optional OpenAI fallback (unchanged) ----
 OPENAI_ENABLED = False
 client = None
 AI_MODEL = os.environ.get("AI_MODEL", "gpt-4o-mini")
@@ -38,46 +38,20 @@ app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB
 logging.basicConfig(level=logging.INFO)
 
 # ============================================================
-# Worker config
+# AI Worker config (IMPORTANT)
 # ============================================================
-WORKER_API = os.getenv("AI_EMAIL_API_URL")       # e.g., https://ai-email-worker.onrender.com
+WORKER_API = os.getenv("AI_EMAIL_API_URL")              # e.g., https://ai-email-worker.onrender.com
 USE_WORKER = os.getenv("USE_WORKER", "true").lower() == "true"
 
-# Simple health check / info
-@app.get("/healthz")
-def health():
-    return {"status": "ok", "worker": bool(WORKER_API), "use_worker": USE_WORKER}, 200
-
-# JSON proxy for quick manual tests (optional)
-@app.post("/generate-email")
-def generate_email():
-    """
-    Proxy: website → Flask → AI worker → JSON back
-    """
-    if not WORKER_API:
-        return {"error": "AI_EMAIL_API_URL not set"}, 500
-
-    data = request.get_json(force=True)
-    try:
-        resp = requests.post(
-            f"{WORKER_API}/write-email",
-            json=data,
-            timeout=30,
-            headers={"Content-Type": "application/json"},
-        )
-        return resp.json(), resp.status_code
-    except Exception as e:
-        return {"error": f"Failed to reach AI worker: {e}"}, 502
-
 # ============================================================
-# File types / schema
+# Small helpers
 # ============================================================
 ALLOWED_CSV   = {"csv"}
 ALLOWED_PDF   = {"pdf"}
 ALLOWED_EXCEL = {"xlsx", "xls"}
 
 REQUIRED_CUSTOMER_COLS = ["email", "name"]
-SUGGESTED_PRODUCT_COLS = ["name", "price"]  # other cols optional
+SUGGESTED_PRODUCT_COLS = ["name", "price"]  # optional: category, sku, url
 
 def allowed(filename: str, exts: set[str]) -> bool:
     return "." in (filename or "") and filename.rsplit(".", 1)[1].lower() in exts
@@ -88,20 +62,22 @@ def assert_required_cols(df: pd.DataFrame, required: List[str], label: str):
         raise ValueError(f"{label} file is missing required column(s): {', '.join(missing)}")
 
 def read_table_upload(file_storage) -> pd.DataFrame:
-    """Return a pandas DataFrame from an uploaded CSV/XLSX/XLS file."""
     fname = (file_storage.filename or "").lower()
     ext = fname.rsplit(".", 1)[-1]
     if ext in ALLOWED_CSV:
         return pd.read_csv(file_storage)
     if ext in ALLOWED_EXCEL:
-        # prefer openpyxl for xlsx
-        if ext == "xlsx":
-            return pd.read_excel(file_storage, engine="openpyxl")
         return pd.read_excel(file_storage)
     raise ValueError("Unsupported file type. Please upload .csv, .xlsx, or .xls")
 
+def price_to_str(v: object) -> str:
+    try:
+        return f"£{float(v):.2f}"
+    except (TypeError, ValueError):
+        return ""
+
 # ============================================================
-# Gmail OAuth (includes SEND)
+# Gmail helpers
 # ============================================================
 GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -159,7 +135,7 @@ def gmail_send(to_addr: str, subject: str, body: str) -> dict:
     return service.users().messages().send(userId="me", body={"raw": raw}).execute()
 
 # ============================================================
-# AI helpers (fallbacks + worker integration)
+# AI helpers (fallbacks + worker call)
 # ============================================================
 DEFAULT_SUBJECT = "Your picks from our latest catalogue"
 DEFAULT_GREETING = "Hi {name},"
@@ -167,11 +143,9 @@ DEFAULT_INTRO = "We picked a few things we think you'll like:"
 DEFAULT_FOOTER = "If you have any questions, just hit reply.\n\nBest,\n{sender_name}"
 
 def summarize_history_to_profile(raw_history_text: str) -> str:
-    """Optional: condense past emails into a brief tone/profile hint."""
     if not raw_history_text.strip():
         return ""
     if not OPENAI_ENABLED:
-        # lightweight default hint
         return ("- Tone: friendly, concise\n"
                 "- Do: suggest 2–3 items\n"
                 "- Don't: overpromise or invent discounts\n")
@@ -184,32 +158,7 @@ def summarize_history_to_profile(raw_history_text: str) -> str:
     except Exception:
         return "- Tone: friendly, concise; Do: be specific; Don't: overpromise."
 
-def build_product_summary(products_df: Optional[pd.DataFrame], preferred: Optional[str], max_recs: int) -> Optional[str]:
-    """Create a compact string like 'Lamp £39.95; Timer £9.99; Cable £6.50' for the worker prompt."""
-    if products_df is None or products_df.empty:
-        return None
-    df = products_df
-    if preferred and "category" in df.columns:
-        try:
-            sub = df[df["category"].astype(str).str.contains(preferred, case=False, na=False)]
-            if not sub.empty:
-                df = sub
-        except Exception:
-            pass
-    sample = df.head(max_recs)
-    parts = []
-    for _, r in sample.iterrows():
-        name = str(r.get("name") or "item").strip()
-        price = r.get("price")
-        try:
-            price_str = f"£{float(price):.2f}" if pd.notna(price) else ""
-        except Exception:
-            price_str = ""
-        parts.append(f"{name}{(' ' + price_str) if price_str else ''}")
-    return "; ".join(parts) if parts else None
-
 def call_worker(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Robust call with tiny retry/backoff. Returns dict with keys like subject/body_* OR {'error':...}"""
     if not (USE_WORKER and WORKER_API):
         return {"error": "Worker disabled or URL missing"}
     last_err = "unknown"
@@ -235,7 +184,6 @@ def call_worker(payload: Dict[str, Any]) -> Dict[str, Any]:
 def generate_personalized_email_fallback(profile: str, customer: dict, recommendations: list,
                                          subject_tpl: str, greeting_tpl: str, intro_tpl: str,
                                          footer_tpl: str, sender_name: str) -> tuple[str, str]:
-    """Your existing fallback (template or OpenAI)."""
     if not OPENAI_ENABLED:
         subject = subject_tpl.format(name=customer.get("name",""))
         body = build_email_for_customer(
@@ -244,8 +192,7 @@ def generate_personalized_email_fallback(profile: str, customer: dict, recommend
             footer_tpl=footer_tpl, sender_name=sender_name
         )
         return subject, body
-
-    # Minimal OpenAI fallback
+    # minimal OpenAI fallback (kept)
     bullets = []
     for p in recommendations:
         name = p.get("name")
@@ -292,19 +239,22 @@ BODY:
         return subject, body
 
 # ============================================================
-# Errors / no-cache
+# Health & proxy (for quick tests)
 # ============================================================
-@app.errorhandler(413)
-def too_large(_e):
-    flash("Upload is too large. Please keep files under 25 MB.", "error")
-    return redirect(url_for("index"))
+@app.get("/healthz")
+def health():
+    return {"status": "ok", "worker": bool(WORKER_API), "use_worker": USE_WORKER}, 200
 
-@app.after_request
-def add_no_cache_headers(response):
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
-    return response
+@app.post("/generate-email")
+def generate_email():
+    if not WORKER_API:
+        return {"error": "AI_EMAIL_API_URL not set"}, 500
+    data = request.get_json(force=True)
+    try:
+        resp = requests.post(f"{WORKER_API}/write-email", json=data, timeout=30)
+        return resp.json(), resp.status_code
+    except Exception as e:
+        return {"error": f"Failed to reach AI worker: {e}"}, 502
 
 # ============================================================
 # Main page (GET shows form; POST handles uploads)
@@ -352,7 +302,6 @@ def index():
             flash("Please upload either a Products CSV/Excel or a Product PDF.", "error")
             return redirect(url_for("index"))
         products_df.rename(columns=lambda c: c.strip().lower(), inplace=True)
-        # ensure columns exist
         for c in ["name", "price", "category", "sku", "url"]:
             if c not in products_df.columns:
                 products_df[c] = None
@@ -372,23 +321,26 @@ def index():
             history_blob = ""
     profile_text = summarize_history_to_profile(history_blob) if history_blob else ""
 
-    # Match products to customers (you already have this logic)
+    # Match products to customers (your function)
     matched = match_products_to_customers(products_df, customers_df, max_recs=max_recs)
 
-        # --- NEW: build a per-customer summary from recs ---
-        def price_str(v):
-            try:
-                return f"£{float(v):.2f}"
-            except Exception:
-                return ""
+    # Build rows using the Worker (grounded) with safe fallback
+    rows = []
+    for _, m in matched.iterrows():
+        cust: Dict[str, Any] = m["customer"]
+        recs: List[Dict[str, Any]] = m["recommendations"]
 
+        name = (cust.get("name") or "").strip() or "there"
+        email = (cust.get("email") or "").strip()
+        preferred = (cust.get("preferred_category") or "").strip() or None
+
+        # a compact human-readable summary + structured recs
         rec_summary = "; ".join(
-            f"{(r.get('name') or 'item').strip()} {price_str(r.get('price'))}".strip()
-            + (f" ({r.get('url')})" if r.get('url') else "")
+            (f"{(r.get('name') or 'item').strip()} {price_to_str(r.get('price'))}".strip()
+             + (f" ({r.get('url')})" if r.get('url') else ""))
             for r in (recs or [])
         ) or "(no items)"
 
-        # Payload for worker (now includes *recommendations*)
         payload = {
             "goal": "win-back",
             "offer": "Free shipping this week",
@@ -396,7 +348,7 @@ def index():
             "constraints": {
                 "sender_name": sender_name,
                 "tone_hint": (profile_text[:800] if profile_text else None),
-                "product_summary": rec_summary  # human-readable
+                "product_summary": rec_summary
             },
             "customer": {
                 "id": f"cust_{email or name}",
@@ -405,42 +357,38 @@ def index():
                 "locale": "en-GB",
                 "segment": [preferred] if preferred else []
             },
-            "recommendations": recs  # <-- critical: pass structured items
+            "recommendations": recs  # <-- key for grounded content
         }
 
         ai = call_worker(payload)
 
         if "error" not in ai:
-            # Prefer HTML/text from worker, but keep your existing review pipeline (plain text body)
             subject = ai.get("subject", DEFAULT_SUBJECT).replace("{name}", name)
             body_text = ai.get("body_text") or ""
             body_html = ai.get("body_html") or ""
-            # Use body_text for Gmail send (safe) but stash HTML for the review template later if you wish
             rows.append({
                 "email": email,
                 "name":  name,
                 "subject": subject,
-                "body": body_text or body_html or "",     # keep existing key
-                "body_html": body_html,                   # extra (non-breaking)
+                "body": body_text or body_html or "",
+                "body_html": body_html,
                 "preheader": ai.get("preheader", ""),
                 "cta_text": ai.get("cta_text", ""),
                 "cta_url": ai.get("cta_url", ""),
                 "notes": ai.get("notes", "")
             })
-            continue
-
-        # Worker failed -> fallback to your template/OpenAI path
-        subject, body = generate_personalized_email_fallback(
-            profile_text, cust, recs,
-            DEFAULT_SUBJECT, DEFAULT_GREETING, DEFAULT_INTRO, DEFAULT_FOOTER, sender_name
-        )
-        rows.append({
-            "email": email,
-            "name":  name,
-            "subject": subject,
-            "body": body,
-            "notes": f"[fallback] {ai.get('error','')}"
-        })
+        else:
+            subject, body = generate_personalized_email_fallback(
+                profile_text, cust, recs,
+                DEFAULT_SUBJECT, DEFAULT_GREETING, DEFAULT_INTRO, DEFAULT_FOOTER, sender_name
+            )
+            rows.append({
+                "email": email,
+                "name":  name,
+                "subject": subject,
+                "body": body,
+                "notes": f"[fallback] {ai.get('error','')}"
+            })
 
     # Save for review
     session["review_rows"] = rows
@@ -448,7 +396,7 @@ def index():
     return redirect(url_for("review"))
 
 # ============================================================
-# Review & Send workflow
+# Review & Send workflow (unchanged)
 # ============================================================
 @app.route("/review")
 def review():
@@ -517,7 +465,6 @@ def review_send_one():
         flash("Invalid item.", "error")
         return redirect(url_for("review"))
 
-    # persist edits
     subject = request.form.get("subject", rows[i].get("subject",""))
     body    = request.form.get("body", rows[i].get("body",""))
     rows[i]["subject"] = subject
@@ -584,22 +531,6 @@ def google_logout():
     session.pop("gmail_creds", None)
     flash("Google disconnected.", "success")
     return redirect(url_for("index"))
-
-# Optional debug (remove later)
-@app.get("/oauth-debug")
-def oauth_debug():
-    return {
-        "GOOGLE_CLIENT_ID": os.environ.get("GOOGLE_CLIENT_ID", ""),
-        "GOOGLE_REDIRECT_URI": os.environ.get("GOOGLE_REDIRECT_URI", "")
-    }
-
-@app.get("/oauth-authurl")
-def oauth_authurl():
-    flow = get_google_flow()
-    auth_url, state = flow.authorization_url(
-        access_type="offline", include_granted_scopes="true", prompt="consent"
-    )
-    return {"auth_url": auth_url, "state": state}
 
 # ============================================================
 # Local runner (Render uses gunicorn)
