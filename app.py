@@ -375,30 +375,28 @@ def index():
     # Match products to customers (you already have this logic)
     matched = match_products_to_customers(products_df, customers_df, max_recs=max_recs)
 
-    # Build rows using the Worker (preferred) with safe fallback
-    rows = []
-    for _, m in matched.iterrows():
-        cust: Dict[str, Any] = m["customer"]
-        recs: List[Dict[str, Any]] = m["recommendations"]
+        # --- NEW: build a per-customer summary from recs ---
+        def price_str(v):
+            try:
+                return f"£{float(v):.2f}"
+            except Exception:
+                return ""
 
-        name = (cust.get("name") or "").strip() or "there"
-        email = (cust.get("email") or "").strip()
-        preferred = None
-        # try to infer preferred category if present on customer row
-        if isinstance(cust, dict):
-            preferred = (cust.get("preferred_category") or "").strip() or None
+        rec_summary = "; ".join(
+            f"{(r.get('name') or 'item').strip()} {price_str(r.get('price'))}".strip()
+            + (f" ({r.get('url')})" if r.get('url') else "")
+            for r in (recs or [])
+        ) or "(no items)"
 
-        product_summary = build_product_summary(products_df, preferred, max_recs)
-
-        # Payload for worker
+        # Payload for worker (now includes *recommendations*)
         payload = {
-            "goal": "win-back",                       # you can surface this in the UI later
-            "offer": "Free shipping this week",       # or capture from the form
+            "goal": "win-back",
+            "offer": "Free shipping this week",
             "cta_url": "https://yourwebsite.com/shop",
             "constraints": {
                 "sender_name": sender_name,
                 "tone_hint": (profile_text[:800] if profile_text else None),
-                "product_summary": product_summary
+                "product_summary": rec_summary  # human-readable
             },
             "customer": {
                 "id": f"cust_{email or name}",
@@ -406,7 +404,8 @@ def index():
                 "email": email,
                 "locale": "en-GB",
                 "segment": [preferred] if preferred else []
-            }
+            },
+            "recommendations": recs  # <-- critical: pass structured items
         }
 
         ai = call_worker(payload)
